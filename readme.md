@@ -12,13 +12,20 @@ environment while including tools for RAG and observability.
 
 ## Requirements
 - [Docker Compose](https://docs.docker.com/compose/install/)
-- space and compute requirements coming!
 
 ## Instructions
 1. Set `DOCKER_VOLUME_DIRECTORY` in your environment
 2. Run `docker compose up` in the same directory as the `docker-compose.yml` file from this project
 
-## Services and links
+## Usage
+1. Use WebUI to download models for Ollama
+2. Use service names for internal URIs
+    - http://milvus:19530
+    - http://ollama:11434
+3. Langflow uses default Milvus database and creates collections automatically.  
+4. Use Attu to drop collections from Milvus if you change the embedding model / vector index dimensions
+
+## UI links
 - Attu ( [http://localhost:8000](http://localhost:8000) )
 - Langflow ( [http://localhost:7860](http://localhost:7860) )
 - Open WebUI ( [http://localhost:3000](http://localhost:3000) )
