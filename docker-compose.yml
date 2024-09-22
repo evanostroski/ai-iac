@@ -2,11 +2,10 @@ services:
   ollama:
     container_name: ollama
     image: ollama/ollama
-    restart: always
     ports: 
       - "11434:11434"
     environment:
-      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_HOST=${OLLAMA_HOST:-}
     volumes:
       - "${DOCKER_VOLUME_DIRECTORY:-.}/ollama:/root/.ollama"
 
@@ -14,11 +13,11 @@ services:
     container_name: openwebui
     image: ghcr.io/open-webui/open-webui:main
     ports: 
-      - "3000:8080"
+      - "3001:8080"
     depends_on:
       - ollama
     environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
       - "${DOCKER_VOLUME_DIRECTORY:-.}/openwebui:/app/backend/data"
 
@@ -28,33 +27,78 @@ services:
     ports:
       - "7860:7860"
     depends_on:
-      - postgres
+      langflow-postgres:
+        condition: service_healthy
+    restart: unless-stopped
     environment:
-      - LANGFLOW_DATABASE_URL=postgresql://langflow:langflow@postgres:5432/langflow
-      - LANGFLOW_WORKER_TIMEOUT=60000
+      - LANGFLOW_DATABASE_URL=postgresql://${POSTGRES_USER_LANGFLOW}:${POSTGRES_PASSWORD_LANGFLOW}@langflow-postgres:5432/${POSTGRES_DB_LANGFLOW}
+      - LANGFLOW_WORKER_TIMEOUT=${LANGFLOW_WORKER_TIMEOUT:-300}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/langflow:/app/langflow
-
-  postgres:
-    container_name: postgres
+  
+  langflow-postgres:
+    container_name: langflow-postgres
     image: postgres:16
     environment:
-      POSTGRES_USER: langflow
-      POSTGRES_PASSWORD: langflow
-      POSTGRES_DB: langflow
+      POSTGRES_USER: ${POSTGRES_USER_LANGFLOW}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_LANGFLOW}
+      POSTGRES_DB: ${POSTGRES_DB_LANGFLOW}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
     ports:
       - "5432:5432"
     volumes:
-      - ${DOCKER_VOLUME_DIRECTORY:-.}/postgres:/var/lib/postgresql/data
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/langflow-postgres:/var/lib/postgresql/data
+
+  langfuse:
+    container_name: langfuse
+    image: langfuse/langfuse:2
+    depends_on:
+      langfuse-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER_LANGFUSE}:${POSTGRES_PASSWORD_LANGFUSE}@langfuse-postgres:5432/${POSTGRES_DB_LANGFUSE}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      SALT: ${SALT:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY} # generate via `openssl rand -hex 32`
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
+      
+  langfuse-postgres:
+    container_name: langfuse-postgres
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER_LANGFUSE}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_LANGFUSE}
+      POSTGRES_DB: ${POSTGRES_DB_LANGFUSE}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5433:5432"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/langfuse-postgres:/var/lib/postgresql/data
 
   etcd:
     container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.5
     environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
+      ETCD_AUTO_COMPACTION_MODE: ${ETCD_AUTO_COMPACTION_MODE:-revision}
+      ETCD_AUTO_COMPACTION_RETENTION: ${ETCD_AUTO_COMPACTION_RETENTION:-1000}
+      ETCD_QUOTA_BACKEND_BYTES: ${ETCD_QUOTA_BACKEND_BYTES:-4294967296}
+      ETCD_SNAPSHOT_COUNT: ${ETCD_SNAPSHOT_COUNT:-50000}
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
@@ -68,8 +112,8 @@ services:
     container_name: milvus-minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     ports:
       - "9001:9001"
       - "9000:9000"
@@ -89,12 +133,11 @@ services:
     security_opt:
     - seccomp:unconfined
     environment:
-      MINIO_REGION: us-east-1
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      ETCD_ENDPOINTS: ${ETCD_ENDPOINTS:-etcd:2379}
+      MINIO_ADDRESS: ${MINIO_ADDRESS:-minio:9000}
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/milvus:/var/lib/milvus
-    restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
@@ -114,7 +157,7 @@ services:
     ports:
       - "8000:3000"
     environment:
-      MILVUS_URL: http://milvus:19530
+      MILVUS_URL: ${MILVUS_URL:-http://milvus:19530}
     depends_on:
       - "milvus"
 
