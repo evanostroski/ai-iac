@@ -1,5 +1,4 @@
 # Hi! 👋
----
 This project aims to simplify creating a *local* LLM development 
 environment while including tools for RAG and observability.
 
@@ -12,11 +11,13 @@ environment while including tools for RAG and observability.
 - [Attu](https://github.com/zilliztech/attu) - The GUI for Milvus
 
 ## Requirements
+- [Docker](https://docs.docker.com/get-started/get-docker/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 
 ## Instructions
 1. Rename `.env-example` to `.env` and set your environment variables
 2. Run `docker compose up` in the same directory as the `docker-compose.yml` file from this project
+3. Ollama is configured to use any NVIDIA GPUs. Make sure that your GPU is available to Docker containers by installing [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installation)
 
 ## Usage
 1. Use WebUI to download models for Ollama

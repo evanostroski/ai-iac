@@ -8,6 +8,13 @@ services:
       - OLLAMA_HOST=${OLLAMA_HOST:-}
     volumes:
       - "${DOCKER_VOLUME_DIRECTORY:-.}/ollama:/root/.ollama"
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: "nvidia"
+            count: all
+            capabilities: [gpu]
 
   openwebui:
     container_name: openwebui
